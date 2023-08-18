@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const SSLCommerzPayment = require('sslcommerz-lts');
+const SSLCommerzPayment = require('sslcommerz-lts')
 const { ObjectId } = require('mongodb');
 require("dotenv").config();
 const app = express();
@@ -28,9 +28,7 @@ const client = new MongoClient(uri, {
 
 const store_id = process.env.SSL_store_id;
 const store_passwd = process.env.SSL_store_pass;
-const is_live = false; // true for live, false for sandbox
-
-// console.log(process.env.SSL_store_id);
+const is_live = false //true for live, false for sandbox
 
 
 async function run() {
@@ -40,7 +38,7 @@ async function run() {
 
 
         const coursesCollection = client.db("cmAcademy").collection("courses");
-        const ordersCollection = client.db("courseOrders").collection("orders");
+        const ordersCollection = client.db("cmAcademy").collection("orders");
 
 
         app.get('/courses', async (req, res) => {
@@ -58,18 +56,23 @@ async function run() {
         });
 
 
-        
 
 
-        const tran_id = new ObjectId().toString();
 
-        app.post("/orders", async (req, res) => {
-            const { courseId } = req.body;
-            const course = await coursesCollection.findOne({ _id: new ObjectId(courseId) });
+ 
+
+        app.post('/order', async (req, res) => {
+
+            // const course = await coursesCollection.findOne({ _id: new ObjectId(req.body.courseId) });
             const order = req.body;
 
+            console.log(order);
+            
+
+            const tran_id = new ObjectId().toString();
+
             const data = {
-                total_amount: course?.price,
+                total_amount: order.price,
                 currency: 'BDT',
                 tran_id: tran_id, // use unique tran_id for each api call
                 success_url: `http://localhost:5000/payment/success/${tran_id}`,
@@ -77,7 +80,7 @@ async function run() {
                 cancel_url: 'http://localhost:3030/cancel',
                 ipn_url: 'http://localhost:3030/ipn',
                 shipping_method: 'Courier',
-                product_name: course?.title,
+                product_name: 'Courses',
                 product_category: 'Electronic',
                 product_profile: 'general',
                 cus_name: 'Customer Name',
@@ -88,7 +91,7 @@ async function run() {
                 cus_state: 'Dhaka',
                 cus_postcode: '1000',
                 cus_country: 'Bangladesh',
-                cus_phone: '01711111111',
+                cus_phone: order.mobile,
                 cus_fax: '01711111111',
                 ship_name: 'Customer Name',
                 ship_add1: 'Dhaka',
@@ -96,62 +99,55 @@ async function run() {
                 ship_city: 'Dhaka',
                 ship_state: 'Dhaka',
                 ship_postcode: 1000,
-                instructor: course?.instructor,
-                duration: course?.duration,
-                certificate: true
+                ship_country: 'Bangladesh',
+                order_date: order.date,
+                duration: '12 weeks',
+                instructor: 'Alex',
+
 
             };
 
-            console.log(data);
-
-            const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
+           
+            const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live)
             sslcz.init(data).then(apiResponse => {
-              // Redirect the user to the payment gateway
-              let GatewayPageURL = apiResponse.GatewayPageURL;
-              res.send({ url: GatewayPageURL });
-      
-              const finalOrder = {
-                course,
-                order,
-                paidStatus: false,
-                transactionId: tran_id
-              };
-              const result = ordersCollection.insertOne(finalOrder);
-              console.log(result);
-      
-              console.log('Redirecting to: ', GatewayPageURL);
+                // Redirect the user to payment gateway
+                let GatewayPageURL = apiResponse.GatewayPageURL
+                res.send({ url: GatewayPageURL })
+
+                const finalOrder = {
+                    paidStatus: false,
+                    order,
+                    transactionId: tran_id
+                };
+                const result = ordersCollection.insertOne(finalOrder)
+
+                console.log('Redirecting to: ', GatewayPageURL)
             });
 
 
-            // app.post("/payment/success/:tranId", async (req, res) => {
-            //     console.log(req.params.tranId);
-            //     const result = await ordersCollection.updateOne({ transactionId: req.params.tranId }, {
-            //         $set: {
-            //             paidStatus: true
-            //         }
-            //     });
-            //     if (result.modifiedCount > 0) {
-            //         res.redirect(`http://localhost:5173/payment/success/${req.params.tranId}`);
-            //     }
-            // });
 
-            // app.post("/payment/fail/:tranId", async (req, res) => {
-            //     const result = await ordersCollection.deleteOne({ transactionId: req.params.tranId });
+            app.post('/payment/success/:tranId', async (req, res) => {
+               
+                const result = await ordersCollection.updateOne({ transactionId: req.params.tranId }, {
+                    $set: {
+                        paidStatus: true,
+                    },
+                });
 
-            //     if (result.deletedCount) {
-            //         res.redirect(`http://localhost:5173/payment/fail/${req.params.tranId}`)
-            //     }
+                if (result.modifiedCount > 0) {
+                    res.redirect(`http://localhost:5173/payment/success/${req.params.tranId}`)
+                }
+            });
 
+            app.post('/payment/fail/:tranId', async (req, res) => {
+                const result = await ordersCollection.deleteOne({ transactionId: req.params.tranId });
 
-            // })
+                if(result.deletedCount){
+                    res.redirect(`http://localhost:5173/payment/fail/${req.params.tranId}`)
+                };
+            })
 
-
-        });
-
-        app.get("/orders", async (req, res) => {
-            const result = await ordersCollection.find().toArray();
-            res.send(result);
-        });
+        })
 
 
 
