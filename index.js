@@ -150,6 +150,14 @@ async function run() {
         })
 
 
+        
+    app.get("/orders", async (req, res) => {
+        const result = await ordersCollection.find().toArray();
+        res.send(result);
+      });
+  
+
+
 
 
 
